@@ -1,5 +1,5 @@
 -- ============================================================
--- 🎖 FLEEXI FREE SCRIPT V1 (REMAKER & FIXED FOR MOBILE/PC)
+-- 🎖 FLEEXI FREE SCRIPT V2 (REBUILT & FIXED ESP / ZERO-DELAY AIM)
 -- ============================================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -8,7 +8,7 @@ local CoreGui = game:GetService("CoreGui")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- Безопасный контейнер GUI (Поддержка всех мобильных и ПК исполнителей)
+-- Безопасный контейнер GUI
 local ParentGui
 if gethui then
     ParentGui = gethui()
@@ -29,13 +29,12 @@ end
 -- ============================================================
 local Config = {
     -- ESP
-    ESP_Enabled = false,
-    ESP_Boxes = false,
-    ESP_Names = false,
-    ESP_Health = false,
-    ESP_Distance = false,
+    ESP_Enabled = true,
+    ESP_Boxes = true,
+    ESP_Names = true,
+    ESP_Health = true,
+    ESP_Distance = true,
     ESP_Tracers = false,
-    ESP_Skeletons = false,
     ESP_Chams = false,
     ESP_ChamsColor = Color3.fromRGB(255, 30, 60),
     ESP_ChamsTransparency = 0.4,
@@ -43,11 +42,11 @@ local Config = {
     ESP_MaxDistance = 2000,
 
     -- Aimbot
-    Aimbot_Enabled = false,
+    Aimbot_Enabled = true,
     Aimbot_Key = Enum.UserInputType.MouseButton2,
-    Aimbot_Smoothness = 1,
+    Aimbot_Smoothness = 1, -- 1 = Мгновенно (Zero Delay)
     Aimbot_FOV = 150,
-    Aimbot_ShowFOV = false,
+    Aimbot_ShowFOV = true,
     Aimbot_FOVColor = Color3.fromRGB(255, 30, 60),
     Aimbot_TargetPart = "Head",
     Aimbot_TeamCheck = false,
@@ -76,7 +75,6 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = ParentGui
 
--- Вспомогательные контейнеры для визуала
 local ESPContainer = Instance.new("Folder", ScreenGui)
 ESPContainer.Name = "ESPContainer"
 
@@ -123,7 +121,6 @@ local ToggleStroke = Instance.new("UIStroke", ToggleButton)
 ToggleStroke.Color = Color3.fromRGB(255, 30, 60)
 ToggleStroke.Thickness = 2
 
--- Главная панель
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 480, 0, 380)
@@ -144,7 +141,6 @@ MainStroke.Color = Color3.fromRGB(255, 30, 60)
 MainStroke.Thickness = 1.5
 MainStroke.Transparency = 0.2
 
--- TITLE BAR
 local TitleBar = Instance.new("Frame", MainFrame)
 TitleBar.Name = "TitleBar"
 TitleBar.Size = UDim2.new(1, 0, 0, 42)
@@ -159,7 +155,7 @@ local TitleLabel = Instance.new("TextLabel", TitleBar)
 TitleLabel.Size = UDim2.new(1, -50, 1, 0)
 TitleLabel.Position = UDim2.new(0, 15, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "🎖 FLEEXI SCRIPT <font color=\"#FF1E3C\">V1 FIXED</font>"
+TitleLabel.Text = "🎖 FLEEXI SCRIPT <font color=\"#FF1E3C\">V2 PERFECT</font>"
 TitleLabel.RichText = true
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.TextSize = 16
@@ -179,7 +175,6 @@ CloseBtn.ZIndex = 12
 local CloseCorner = Instance.new("UICorner", CloseBtn)
 CloseCorner.CornerRadius = UDim.new(0, 8)
 
--- TAB BAR
 local TabBar = Instance.new("Frame", MainFrame)
 TabBar.Size = UDim2.new(1, -20, 0, 32)
 TabBar.Position = UDim2.new(0, 10, 0, 48)
@@ -191,7 +186,6 @@ TabLayout.FillDirection = Enum.FillDirection.Horizontal
 TabLayout.Padding = UDim.new(0, 6)
 TabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
--- CONTENT FRAME
 local ContentFrame = Instance.new("Frame", MainFrame)
 ContentFrame.Size = UDim2.new(1, -20, 1, -92)
 ContentFrame.Position = UDim2.new(0, 10, 0, 84)
@@ -465,7 +459,6 @@ CreateToggle(espPage, "Имена", Config.ESP_Names, function(v) Config.ESP_Nam
 CreateToggle(espPage, "Полоса здоровья", Config.ESP_Health, function(v) Config.ESP_Health = v end)
 CreateToggle(espPage, "Дистанция", Config.ESP_Distance, function(v) Config.ESP_Distance = v end)
 CreateToggle(espPage, "Линии (Tracers)", Config.ESP_Tracers, function(v) Config.ESP_Tracers = v end)
-CreateToggle(espPage, "Скелет (Skeletons)", Config.ESP_Skeletons, function(v) Config.ESP_Skeletons = v end)
 CreateToggle(espPage, "Проверка команды", Config.ESP_TeamCheck, function(v) Config.ESP_TeamCheck = v end)
 
 CreateLabel(espPage, "Chams (Подсветка)")
@@ -478,7 +471,7 @@ CreateLabel(aimbotPage, "Авто-наведение")
 CreateToggle(aimbotPage, "Включить Aimbot", Config.Aimbot_Enabled, function(v) Config.Aimbot_Enabled = v end)
 CreateToggle(aimbotPage, "Показывать FOV Круг", Config.Aimbot_ShowFOV, function(v) Config.Aimbot_ShowFOV = v end)
 CreateSlider(aimbotPage, "Размер FOV", 10, Config.Aimbot_MaxFOV, Config.Aimbot_FOV, function(v) Config.Aimbot_FOV = v end)
-CreateSlider(aimbotPage, "Плавность (Smooth)", 1, 30, Config.Aimbot_Smoothness, function(v) Config.Aimbot_Smoothness = v end)
+CreateSlider(aimbotPage, "Плавность (1 = Без задержки)", 1, 30, Config.Aimbot_Smoothness, function(v) Config.Aimbot_Smoothness = v end)
 CreateSlider(aimbotPage, "Предикшн (Упреждение)", 0, 30, Config.Aimbot_Prediction * 10, function(v) Config.Aimbot_Prediction = v / 10 end)
 CreateDropdown(aimbotPage, "Цель наведения", {"Head", "HumanoidRootPart", "UpperTorso"}, Config.Aimbot_TargetPart, function(v) Config.Aimbot_TargetPart = v end)
 CreateToggle(aimbotPage, "Проверка команды", Config.Aimbot_TeamCheck, function(v) Config.Aimbot_TeamCheck = v end)
@@ -496,7 +489,7 @@ CreateLabel(settingsPage, "Информация")
 local infoLbl = Instance.new("TextLabel", settingsPage)
 infoLbl.Size = UDim2.new(1, 0, 0, 60)
 infoLbl.BackgroundTransparency = 1
-infoLbl.Text = "Fleexi Free Script V1 Fixed Edition\nПоддержка: PC, Android, iOS\nОптимизирован для всех исполняющих сред."
+infoLbl.Text = "Fleexi Free Script V2 Perfect Edition\nПоддержка: PC, Android, iOS\nУстранено дрожание аимбота, переработан ESP."
 infoLbl.TextColor3 = Color3.fromRGB(180, 180, 200)
 infoLbl.TextSize = 12
 infoLbl.Font = Enum.Font.Gotham
@@ -513,7 +506,7 @@ CloseBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ============================================================
--- GUI-BASED ESP SYSTEM (100% WORKING ON MOBILE/PC)
+-- FULLY FIXED ESP SYSTEM
 -- ============================================================
 local ESP_GUI_Objects = {}
 
@@ -574,8 +567,7 @@ local function CreatePlayerESP(plr)
         Dist = distLbl,
         HpBg = hpBg,
         HpBar = hpBar,
-        Tracer = tracer,
-        Skeletons = {}
+        Tracer = tracer
     }
 end
 
@@ -587,7 +579,6 @@ local function RemovePlayerESP(plr)
     o.Dist:Destroy()
     o.HpBg:Destroy()
     o.Tracer:Destroy()
-    for _, l in pairs(o.Skeletons) do l:Destroy() end
     ESP_GUI_Objects[plr] = nil
 end
 
@@ -597,7 +588,6 @@ local function HideESP(o)
     o.Dist.Visible = false
     o.HpBg.Visible = false
     o.Tracer.Visible = false
-    for _, l in pairs(o.Skeletons) do l.Visible = false end
 end
 
 local function UpdateESP()
@@ -613,10 +603,9 @@ local function UpdateESP()
 
         local char = plr.Character
         local hrp = char:FindFirstChild("HumanoidRootPart")
-        local head = char:FindFirstChild("Head")
         local hum = char:FindFirstChildOfClass("Humanoid")
 
-        if not hrp or not head or not hum then
+        if not hrp or not hum then
             HideESP(o)
             continue
         end
@@ -627,30 +616,35 @@ local function UpdateESP()
             continue
         end
 
-        local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-        if not onScreen then
+        local cframe, size = char:GetBoundingBox()
+        local topPos = cframe.Position + Vector3.new(0, size.Y / 2 + 0.5, 0)
+        local botPos = cframe.Position - Vector3.new(0, size.Y / 2 + 0.5, 0)
+
+        local topScreen, topOn = Camera:WorldToViewportPoint(topPos)
+        local botScreen, botOn = Camera:WorldToViewportPoint(botPos)
+
+        if not topOn or not botOn or topScreen.Z < 0 then
             HideESP(o)
             continue
         end
 
-        local headPos = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.6, 0))
-        local footPos = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
-
-        local boxHeight = math.abs(headPos.Y - footPos.Y)
-        local boxWidth = boxHeight * 0.55
+        local height = math.abs(botScreen.Y - topScreen.Y)
+        local width = height * 0.65
+        local x = topScreen.X - width / 2
+        local y = topScreen.Y
 
         -- Box
         if Config.ESP_Boxes then
             o.Box.Visible = true
-            o.Box.Position = UDim2.new(0, screenPos.X - boxWidth / 2, 0, headPos.Y)
-            o.Box.Size = UDim2.new(0, boxWidth, 0, boxHeight)
+            o.Box.Position = UDim2.new(0, x, 0, y)
+            o.Box.Size = UDim2.new(0, width, 0, height)
         else o.Box.Visible = false end
 
         -- Name
         if Config.ESP_Names then
             o.Name.Visible = true
             o.Name.Text = plr.Name
-            o.Name.Position = UDim2.new(0, screenPos.X - 50, 0, headPos.Y - 16)
+            o.Name.Position = UDim2.new(0, topScreen.X - 50, 0, y - 16)
             o.Name.Size = UDim2.new(0, 100, 0, 14)
         else o.Name.Visible = false end
 
@@ -658,7 +652,7 @@ local function UpdateESP()
         if Config.ESP_Distance then
             o.Dist.Visible = true
             o.Dist.Text = math.floor(dist) .. "m"
-            o.Dist.Position = UDim2.new(0, screenPos.X - 50, 0, footPos.Y + 2)
+            o.Dist.Position = UDim2.new(0, topScreen.X - 50, 0, botScreen.Y + 2)
             o.Dist.Size = UDim2.new(0, 100, 0, 12)
         else o.Dist.Visible = false end
 
@@ -666,8 +660,8 @@ local function UpdateESP()
         if Config.ESP_Health then
             local hpPercent = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
             o.HpBg.Visible = true
-            o.HpBg.Position = UDim2.new(0, screenPos.X - boxWidth / 2 - 6, 0, headPos.Y)
-            o.HpBg.Size = UDim2.new(0, 3, 0, boxHeight)
+            o.HpBg.Position = UDim2.new(0, x - 6, 0, y)
+            o.HpBg.Size = UDim2.new(0, 3, 0, height)
 
             o.HpBar.Size = UDim2.new(1, 0, hpPercent, 0)
             o.HpBar.Position = UDim2.new(0, 0, 1 - hpPercent, 0)
@@ -677,7 +671,7 @@ local function UpdateESP()
         -- Tracer
         if Config.ESP_Tracers then
             local startX, startY = Camera.ViewportSize.X / 2, Camera.ViewportSize.Y
-            local stopX, stopY = screenPos.X, footPos.Y
+            local stopX, stopY = topScreen.X, botScreen.Y
             local distanceLine = math.sqrt((stopX - startX)^2 + (stopY - startY)^2)
             local angle = math.atan2(stopY - startY, stopX - startX)
 
@@ -690,7 +684,7 @@ local function UpdateESP()
 end
 
 -- ============================================================
--- CHAMS SYSTEM (HIGHLIGHT BASED)
+-- CHAMS SYSTEM
 -- ============================================================
 local ChamsObjects = {}
 
@@ -721,7 +715,7 @@ local function UpdateChams()
 end
 
 -- ============================================================
--- AIMBOT SYSTEM
+-- AIMBOT SYSTEM (ZERO DELAY & NO JITTER)
 -- ============================================================
 local aimbotActive = false
 
@@ -737,7 +731,7 @@ local function GetClosestTarget()
         if not part then continue end
 
         local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-        if not onScreen then continue end
+        if not onScreen or screenPos.Z < 0 then continue end
 
         local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
         if dist < minDist then
@@ -748,8 +742,7 @@ local function GetClosestTarget()
     return closest
 end
 
-local function UpdateAimbot()
-    -- FOV Render
+local function ProcessAimbot()
     if Config.Aimbot_Enabled and Config.Aimbot_ShowFOV then
         FOVCircleGui.Visible = true
         FOVCircleGui.Size = UDim2.new(0, Config.Aimbot_FOV * 2, 0, Config.Aimbot_FOV * 2)
@@ -770,6 +763,7 @@ local function UpdateAimbot()
     end
 
     local targetCF = CFrame.new(Camera.CFrame.Position, targetPos)
+    
     if Config.Aimbot_Smoothness <= 1 then
         Camera.CFrame = targetCF
     else
@@ -791,7 +785,7 @@ UserInputService.InputEnded:Connect(function(input)
 end)
 
 -- ============================================================
--- GUI-BASED CROSSHAIR SYSTEM (OPTIMIZED PIXEL GRID)
+-- CROSSHAIR SYSTEM
 -- ============================================================
 local crosshairPixelPool = {}
 local crosshairAngle = 0
@@ -845,14 +839,14 @@ local function UpdateCrosshair()
 end
 
 -- ============================================================
--- EVENT CONNECTIONS & MAIN LOOP
+-- MAIN LOOP
 -- ============================================================
 Players.PlayerRemoving:Connect(RemovePlayerESP)
 
 RunService.RenderStepped:Connect(function()
     UpdateESP()
     UpdateChams()
-    UpdateAimbot()
+    ProcessAimbot()
 
     if Config.Crosshair_Rotate then
         crosshairAngle = (crosshairAngle + Config.Crosshair_RotateSpeed) % 360
@@ -860,12 +854,11 @@ RunService.RenderStepped:Connect(function()
     UpdateCrosshair()
 end)
 
--- Уведомление
 if game:GetService("StarterGui") then
     pcall(function()
         game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "🎖 Fleexi Free Fixed",
-            Text = "Все функции успешно исправлены!",
+            Title = "🎖 Fleexi Free V2",
+            Text = "Исправлен ESP и Аимбот!",
             Duration = 4
         })
     end)
