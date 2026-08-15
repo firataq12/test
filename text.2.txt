@@ -1,0 +1,1721 @@
+--[[
+    Fleexi Free Script V1 - Mobile Edition
+    Delta / Codex Executor Uyumlu
+    Yatay GUI - Tam Rusça Arayüz
+    Tüm özellikler çalışır durumda
+]]
+
+-- Önceki çalışmayı temizle
+if getgenv().FleexiCleanup then
+    pcall(getgenv().FleexiCleanup)
+end
+
+-- ============================================================
+-- SERVİSLER
+-- ============================================================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local Camera = workspace.CurrentCamera
+local LP = Players.LocalPlayer
+local Connections = {}
+local DrawingCache = {}
+local ESPCache = {}
+local ChamsCache = {}
+local CrosshairCache = {}
+local FOVCircle = nil
+local CrosshairAngle = 0
+
+-- ============================================================
+-- KONFİGÜRASYON
+-- ============================================================
+local CFG = {
+    ESP_On = false,
+    ESP_Skeleton = false,
+    ESP_Name = false,
+    ESP_Distance = false,
+    ESP_HealthBar = false,
+    ESP_Box = false,
+    ESP_HeadDot = false,
+    ESP_Tracer = false,
+    ESP_MaxDist = 800,
+    ESP_TeamCheck = false,
+    ESP_Chams = false,
+    ESP_ChamsColorIdx = 1,
+
+    AIM_On = false,
+    AIM_FOVShow = true,
+    AIM_FOVSize = 150,
+    AIM_TargetIdx = 1,
+    AIM_Smooth = 1,
+    AIM_Silent = false,
+
+    CROSS_On = false,
+    CROSS_Rotate = false,
+    CROSS_RotSpd = 3,
+    CROSS_Thick = 2,
+    CROSS_Density = 5,
+    CROSS_Size = 12,
+
+    BypassLimit = 500,
+    GUIOpen = false,
+}
+
+local TargetParts = {"Head", "HumanoidRootPart", "LeftFoot", "HumanoidRootPart"}
+local TargetNames = {"Голова", "Корпус", "Ноги", "Всё тело"}
+local ChamsColors = {
+    {n = "Красный", c = Color3.fromRGB(255, 40, 40)},
+    {n = "Синий", c = Color3.fromRGB(40, 100, 255)},
+    {n = "Зелёный", c = Color3.fromRGB(40, 255, 80)},
+    {n = "Жёлтый", c = Color3.fromRGB(255, 255, 40)},
+    {n = "Розовый", c = Color3.fromRGB(255, 40, 200)},
+    {n = "Голубой", c = Color3.fromRGB(40, 255, 255)},
+}
+
+-- ============================================================
+-- RENKLER
+-- ============================================================
+local C = {
+    BG1 = Color3.fromRGB(12, 4, 4),
+    BG2 = Color3.fromRGB(22, 7, 7),
+    BG3 = Color3.fromRGB(35, 10, 10),
+    BG4 = Color3.fromRGB(45, 13, 13),
+    Red1 = Color3.fromRGB(180, 25, 25),
+    Red2 = Color3.fromRGB(220, 35, 35),
+    Red3 = Color3.fromRGB(255, 55, 55),
+    Red4 = Color3.fromRGB(255, 85, 85),
+    RedDark = Color3.fromRGB(90, 15, 15),
+    Border = Color3.fromRGB(100, 18, 18),
+    TxtW = Color3.fromRGB(255, 225, 225),
+    TxtG = Color3.fromRGB(190, 140, 140),
+    TxtM = Color3.fromRGB(130, 90, 90),
+    On = Color3.fromRGB(200, 35, 35),
+    Off = Color3.fromRGB(50, 16, 16),
+    White = Color3.fromRGB(255, 255, 255),
+    Black = Color3.fromRGB(0, 0, 0),
+    Enemy = Color3.fromRGB(255, 50, 50),
+    Friend = Color3.fromRGB(80, 130, 255),
+}
+
+-- ============================================================
+-- YARDIMCI FONKSİYONLAR
+-- ============================================================
+local function W2S(pos)
+    local s, o = Camera:WorldToViewportPoint(pos)
+    return Vector2.new(s.X, s.Y), o, s.Z
+end
+
+local function Dist(a, b) return (a - b).Magnitude end
+
+local function Alive(p)
+    local ch = p and p.Character
+    if not ch then return false end
+    local h = ch:FindFirstChildOfClass("Humanoid")
+    local r = ch:FindFirstChild("HumanoidRootPart")
+    return h and r and h.Health > 0
+end
+
+local function SameTeam(p)
+    if not CFG.ESP_TeamCheck then return false end
+    return LP.Team and p.Team and LP.Team == p.Team
+end
+
+local function SafeRemove(d)
+    if d then pcall(function() d:Remove() end) end
+end
+
+local function MakeCorner(p, r)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r or 6)
+    c.Parent = p
+    return c
+end
+
+local function MakeStroke(p, col, t)
+    local s = Instance.new("UIStroke")
+    s.Color = col or C.Border
+    s.Thickness = t or 1
+    s.Parent = p
+    return s
+end
+
+local function MakePad(p, t, b, l, r)
+    local pd = Instance.new("UIPadding")
+    pd.PaddingTop = UDim.new(0, t or 0)
+    pd.PaddingBottom = UDim.new(0, b or 0)
+    pd.PaddingLeft = UDim.new(0, l or 0)
+    pd.PaddingRight = UDim.new(0, r or 0)
+    pd.Parent = p
+    return pd
+end
+
+-- ============================================================
+-- GUI OLUŞTURMA
+-- ============================================================
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "FleexiV1Mobile"
+Gui.ResetOnSpawn = false
+Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+Gui.DisplayOrder = 9999
+
+pcall(function()
+    if syn and syn.protect_gui then syn.protect_gui(Gui) end
+end)
+
+Gui.Parent = CoreGui
+
+-- ============================================================
+-- MEDAL BUTONU (Açma/Kapama)
+-- ============================================================
+local Medal = Instance.new("TextButton")
+Medal.Size = UDim2.new(0, 46, 0, 46)
+Medal.Position = UDim2.new(0, 10, 0.5, -23)
+Medal.BackgroundColor3 = C.BG1
+Medal.Text = "🎖"
+Medal.TextSize = 22
+Medal.Font = Enum.Font.GothamBold
+Medal.TextColor3 = C.Red3
+Medal.BorderSizePixel = 0
+Medal.ZIndex = 500
+Medal.Active = true
+Medal.Draggable = true
+Medal.AutoButtonColor = false
+Medal.Parent = Gui
+MakeCorner(Medal, 23)
+MakeStroke(Medal, C.Red1, 2)
+
+-- ============================================================
+-- ANA ÇERÇEVE (Yatay - Landscape)
+-- ============================================================
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Size = UDim2.new(0, 580, 0, 320)
+Main.Position = UDim2.new(0.5, -290, 0.5, -160)
+Main.BackgroundColor3 = C.BG1
+Main.BorderSizePixel = 0
+Main.Visible = false
+Main.ZIndex = 100
+Main.Active = true
+Main.Draggable = true
+Main.Parent = Gui
+MakeCorner(Main, 10)
+MakeStroke(Main, C.Red1, 2)
+
+-- Başlık
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 32)
+TitleBar.BackgroundColor3 = C.BG2
+TitleBar.BorderSizePixel = 0
+TitleBar.ZIndex = 102
+TitleBar.Parent = Main
+MakeCorner(TitleBar, 10)
+
+local TitleCover = Instance.new("Frame")
+TitleCover.Size = UDim2.new(1, 0, 0, 10)
+TitleCover.Position = UDim2.new(0, 0, 1, -10)
+TitleCover.BackgroundColor3 = C.BG2
+TitleCover.BorderSizePixel = 0
+TitleCover.ZIndex = 102
+TitleCover.Parent = TitleBar
+
+local TitleTxt = Instance.new("TextLabel")
+TitleTxt.Size = UDim2.new(1, -10, 1, 0)
+TitleTxt.Position = UDim2.new(0, 10, 0, 0)
+TitleTxt.BackgroundTransparency = 1
+TitleTxt.Text = "🎖 Fleexi Free V1 — Мобильная версия"
+TitleTxt.TextColor3 = C.Red4
+TitleTxt.TextSize = 14
+TitleTxt.Font = Enum.Font.GothamBold
+TitleTxt.TextXAlignment = Enum.TextXAlignment.Left
+TitleTxt.ZIndex = 103
+TitleTxt.Parent = TitleBar
+
+-- Kapat butonu
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 30, 0, 24)
+CloseBtn.Position = UDim2.new(1, -36, 0, 4)
+CloseBtn.BackgroundColor3 = C.RedDark
+CloseBtn.Text = "✕"
+CloseBtn.TextColor3 = C.Red3
+CloseBtn.TextSize = 14
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.BorderSizePixel = 0
+CloseBtn.ZIndex = 104
+CloseBtn.AutoButtonColor = false
+CloseBtn.Parent = TitleBar
+MakeCorner(CloseBtn, 4)
+
+-- ============================================================
+-- SOL PANEL - SEKMELER
+-- ============================================================
+local LeftPanel = Instance.new("Frame")
+LeftPanel.Size = UDim2.new(0, 110, 1, -36)
+LeftPanel.Position = UDim2.new(0, 4, 0, 34)
+LeftPanel.BackgroundColor3 = C.BG2
+LeftPanel.BorderSizePixel = 0
+LeftPanel.ZIndex = 101
+LeftPanel.Parent = Main
+MakeCorner(LeftPanel, 6)
+
+local TabList = Instance.new("UIListLayout")
+TabList.FillDirection = Enum.FillDirection.Vertical
+TabList.Padding = UDim.new(0, 3)
+TabList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+TabList.SortOrder = Enum.SortOrder.LayoutOrder
+TabList.Parent = LeftPanel
+
+MakePad(LeftPanel, 6, 6, 4, 4)
+
+-- ============================================================
+-- SAĞ PANEL - İÇERİK
+-- ============================================================
+local RightPanel = Instance.new("ScrollingFrame")
+RightPanel.Size = UDim2.new(1, -122, 1, -38)
+RightPanel.Position = UDim2.new(0, 118, 0, 34)
+RightPanel.BackgroundColor3 = C.BG2
+RightPanel.BorderSizePixel = 0
+RightPanel.ScrollBarThickness = 3
+RightPanel.ScrollBarImageColor3 = C.Red1
+RightPanel.AutomaticCanvasSize = Enum.AutomaticSize.Y
+RightPanel.CanvasSize = UDim2.new(0, 0, 0, 0)
+RightPanel.ZIndex = 101
+RightPanel.Parent = Main
+MakeCorner(RightPanel, 6)
+
+local ContentLayout = Instance.new("UIListLayout")
+ContentLayout.FillDirection = Enum.FillDirection.Vertical
+ContentLayout.Padding = UDim.new(0, 3)
+ContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ContentLayout.Parent = RightPanel
+
+MakePad(RightPanel, 5, 5, 5, 5)
+
+-- ============================================================
+-- SEKME SİSTEMİ
+-- ============================================================
+local TabData = {}
+local ActiveTab = nil
+
+local function MakeTabPage()
+    local page = Instance.new("Frame")
+    page.Size = UDim2.new(1, 0, 0, 0)
+    page.AutomaticSize = Enum.AutomaticSize.Y
+    page.BackgroundTransparency = 1
+    page.BorderSizePixel = 0
+    page.Visible = false
+    page.ZIndex = 102
+    page.Parent = RightPanel
+
+    local lay = Instance.new("UIListLayout")
+    lay.Padding = UDim.new(0, 3)
+    lay.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    lay.SortOrder = Enum.SortOrder.LayoutOrder
+    lay.Parent = page
+
+    return page
+end
+
+local function SwitchTo(name)
+    ActiveTab = name
+    for n, d in pairs(TabData) do
+        local active = (n == name)
+        d.page.Visible = active
+        d.btn.BackgroundColor3 = active and C.Red1 or C.BG3
+        d.btn.TextColor3 = active and C.White or C.TxtG
+    end
+    RightPanel.CanvasPosition = Vector2.new(0, 0)
+end
+
+local function AddTab(name, order)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 30)
+    btn.BackgroundColor3 = C.BG3
+    btn.Text = name
+    btn.TextColor3 = C.TxtG
+    btn.TextSize = 11
+    btn.Font = Enum.Font.GothamSemibold
+    btn.BorderSizePixel = 0
+    btn.AutoButtonColor = false
+    btn.LayoutOrder = order
+    btn.ZIndex = 102
+    btn.Parent = LeftPanel
+    MakeCorner(btn, 5)
+
+    local page = MakeTabPage()
+    page.LayoutOrder = order
+
+    TabData[name] = {btn = btn, page = page}
+
+    btn.MouseButton1Click:Connect(function()
+        SwitchTo(name)
+    end)
+
+    -- Dokunmatik destek
+    btn.TouchTap:Connect(function()
+        SwitchTo(name)
+    end)
+
+    return page
+end
+
+-- ============================================================
+-- UI ELEMAN FONKSİYONLARI
+-- ============================================================
+
+local function AddHeader(page, text, ord)
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1, 0, 0, 22)
+    f.BackgroundTransparency = 1
+    f.LayoutOrder = ord
+    f.ZIndex = 102
+    f.Parent = page
+
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(1, 0, 1, 0)
+    l.BackgroundTransparency = 1
+    l.Text = "── " .. text .. " ──"
+    l.TextColor3 = C.Red4
+    l.TextSize = 11
+    l.Font = Enum.Font.GothamBold
+    l.ZIndex = 103
+    l.Parent = f
+end
+
+local function AddToggle(page, text, default, ord, cb)
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1, 0, 0, 30)
+    f.BackgroundColor3 = C.BG3
+    f.BorderSizePixel = 0
+    f.LayoutOrder = ord
+    f.ZIndex = 102
+    f.Parent = page
+    MakeCorner(f, 5)
+
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(1, -56, 1, 0)
+    l.Position = UDim2.new(0, 8, 0, 0)
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.TextColor3 = C.TxtW
+    l.TextSize = 11
+    l.Font = Enum.Font.Gotham
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.TextTruncate = Enum.TextTruncate.AtEnd
+    l.ZIndex = 103
+    l.Parent = f
+
+    local tBG = Instance.new("Frame")
+    tBG.Size = UDim2.new(0, 36, 0, 18)
+    tBG.Position = UDim2.new(1, -44, 0.5, -9)
+    tBG.BackgroundColor3 = default and C.On or C.Off
+    tBG.BorderSizePixel = 0
+    tBG.ZIndex = 103
+    tBG.Parent = f
+    MakeCorner(tBG, 9)
+
+    local tDot = Instance.new("Frame")
+    tDot.Size = UDim2.new(0, 14, 0, 14)
+    tDot.Position = default and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+    tDot.BackgroundColor3 = C.White
+    tDot.BorderSizePixel = 0
+    tDot.ZIndex = 104
+    tDot.Parent = tBG
+    MakeCorner(tDot, 7)
+
+    local val = default
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 1, 0)
+    btn.BackgroundTransparency = 1
+    btn.Text = ""
+    btn.ZIndex = 105
+    btn.Parent = f
+
+    local function upd()
+        tBG.BackgroundColor3 = val and C.On or C.Off
+        tDot.Position = val and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        val = not val
+        upd()
+        if cb then cb(val) end
+    end)
+
+    btn.TouchTap:Connect(function()
+        val = not val
+        upd()
+        if cb then cb(val) end
+    end)
+
+    return {
+        Set = function(v) val = v; upd() end,
+        Get = function() return val end
+    }
+end
+
+local function AddSlider(page, text, mn, mx, default, ord, cb)
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1, 0, 0, 44)
+    f.BackgroundColor3 = C.BG3
+    f.BorderSizePixel = 0
+    f.LayoutOrder = ord
+    f.ZIndex = 102
+    f.Parent = page
+    MakeCorner(f, 5)
+
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(1, -55, 0, 18)
+    l.Position = UDim2.new(0, 8, 0, 2)
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.TextColor3 = C.TxtW
+    l.TextSize = 10
+    l.Font = Enum.Font.Gotham
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.TextTruncate = Enum.TextTruncate.AtEnd
+    l.ZIndex = 103
+    l.Parent = f
+
+    local vl = Instance.new("TextLabel")
+    vl.Size = UDim2.new(0, 45, 0, 18)
+    vl.Position = UDim2.new(1, -50, 0, 2)
+    vl.BackgroundTransparency = 1
+    vl.Text = tostring(math.floor(default))
+    vl.TextColor3 = C.Red4
+    vl.TextSize = 11
+    vl.Font = Enum.Font.GothamBold
+    vl.TextXAlignment = Enum.TextXAlignment.Right
+    vl.ZIndex = 103
+    vl.Parent = f
+
+    local track = Instance.new("Frame")
+    track.Size = UDim2.new(1, -16, 0, 6)
+    track.Position = UDim2.new(0, 8, 0, 28)
+    track.BackgroundColor3 = C.Off
+    track.BorderSizePixel = 0
+    track.ZIndex = 103
+    track.Parent = f
+    MakeCorner(track, 3)
+
+    local pct = math.clamp((default - mn) / (mx - mn), 0, 1)
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(pct, 0, 1, 0)
+    fill.BackgroundColor3 = C.Red1
+    fill.BorderSizePixel = 0
+    fill.ZIndex = 104
+    fill.Parent = track
+    MakeCorner(fill, 3)
+
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.Position = UDim2.new(pct, -7, 0.5, -7)
+    knob.BackgroundColor3 = C.Red3
+    knob.BorderSizePixel = 0
+    knob.ZIndex = 105
+    knob.Parent = track
+    MakeCorner(knob, 7)
+
+    local curVal = default
+    local dragging = false
+    local maxVal = mx
+
+    local function setVal(v)
+        curVal = math.clamp(math.floor(v), mn, maxVal)
+        local p2 = math.clamp((curVal - mn) / (maxVal - mn), 0, 1)
+        fill.Size = UDim2.new(p2, 0, 1, 0)
+        knob.Position = UDim2.new(p2, -7, 0.5, -7)
+        vl.Text = tostring(curVal)
+        if cb then cb(curVal) end
+    end
+
+    local function handleInput(x)
+        local tAbs = track.AbsolutePosition.X
+        local tSize = track.AbsoluteSize.X
+        if tSize <= 0 then return end
+        local p3 = math.clamp((x - tAbs) / tSize, 0, 1)
+        setVal(mn + (maxVal - mn) * p3)
+    end
+
+    -- Dokunmatik + fare desteği
+    local inputBtn = Instance.new("TextButton")
+    inputBtn.Size = UDim2.new(1, 0, 0, 22)
+    inputBtn.Position = UDim2.new(0, 0, 0, 22)
+    inputBtn.BackgroundTransparency = 1
+    inputBtn.Text = ""
+    inputBtn.ZIndex = 106
+    inputBtn.Parent = f
+
+    inputBtn.MouseButton1Down:Connect(function()
+        dragging = true
+        handleInput(game:GetService("Players").LocalPlayer:GetMouse().X)
+    end)
+
+    inputBtn.TouchPan:Connect(function(positions)
+        if #positions > 0 then
+            handleInput(positions[1].Position.X)
+        end
+    end)
+
+    inputBtn.TouchTap:Connect(function(positions)
+        if #positions > 0 then
+            handleInput(positions[1].X)
+        end
+    end)
+
+    table.insert(Connections, UIS.InputChanged:Connect(function(inp)
+        if dragging then
+            if inp.UserInputType == Enum.UserInputType.MouseMovement then
+                handleInput(inp.Position.X)
+            elseif inp.UserInputType == Enum.UserInputType.Touch then
+                handleInput(inp.Position.X)
+            end
+        end
+    end))
+
+    table.insert(Connections, UIS.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end))
+
+    return {
+        Set = function(v) setVal(v) end,
+        Get = function() return curVal end,
+        SetMax = function(m) maxVal = m end
+    }
+end
+
+local function AddSelector(page, text, opts, defIdx, ord, cb)
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1, 0, 0, 30)
+    f.BackgroundColor3 = C.BG3
+    f.BorderSizePixel = 0
+    f.LayoutOrder = ord
+    f.ZIndex = 102
+    f.Parent = page
+    MakeCorner(f, 5)
+
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(0, 70, 1, 0)
+    l.Position = UDim2.new(0, 8, 0, 0)
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.TextColor3 = C.TxtW
+    l.TextSize = 10
+    l.Font = Enum.Font.Gotham
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.ZIndex = 103
+    l.Parent = f
+
+    local selIdx = defIdx or 1
+    local btns = {}
+
+    local bContainer = Instance.new("Frame")
+    bContainer.Size = UDim2.new(1, -82, 1, -4)
+    bContainer.Position = UDim2.new(0, 78, 0, 2)
+    bContainer.BackgroundTransparency = 1
+    bContainer.ZIndex = 103
+    bContainer.Parent = f
+
+    local bLay = Instance.new("UIListLayout")
+    bLay.FillDirection = Enum.FillDirection.Horizontal
+    bLay.Padding = UDim.new(0, 2)
+    bLay.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    bLay.Parent = bContainer
+
+    local bw = math.floor((580 - 130 - (#opts) * 2) / #opts)
+    bw = math.min(bw, 90)
+
+    for i, opt in ipairs(opts) do
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(0, bw, 1, 0)
+        b.BackgroundColor3 = (i == selIdx) and C.Red1 or C.RedDark
+        b.Text = opt
+        b.TextColor3 = (i == selIdx) and C.White or C.TxtM
+        b.TextSize = 9
+        b.Font = Enum.Font.GothamSemibold
+        b.BorderSizePixel = 0
+        b.AutoButtonColor = false
+        b.ZIndex = 104
+        b.TextTruncate = Enum.TextTruncate.AtEnd
+        b.Parent = bContainer
+        MakeCorner(b, 4)
+
+        btns[i] = b
+
+        local function sel()
+            selIdx = i
+            for j, bb in ipairs(btns) do
+                bb.BackgroundColor3 = (j == i) and C.Red1 or C.RedDark
+                bb.TextColor3 = (j == i) and C.White or C.TxtM
+            end
+            if cb then cb(i) end
+        end
+
+        b.MouseButton1Click:Connect(sel)
+        b.TouchTap:Connect(sel)
+    end
+
+    return {
+        Get = function() return selIdx end,
+        Set = function(i)
+            selIdx = i
+            for j, bb in ipairs(btns) do
+                bb.BackgroundColor3 = (j == i) and C.Red1 or C.RedDark
+                bb.TextColor3 = (j == i) and C.White or C.TxtM
+            end
+        end
+    }
+end
+
+local function AddButton(page, text, ord, cb)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, 0, 0, 28)
+    b.BackgroundColor3 = C.RedDark
+    b.Text = text
+    b.TextColor3 = C.TxtW
+    b.TextSize = 11
+    b.Font = Enum.Font.GothamSemibold
+    b.BorderSizePixel = 0
+    b.AutoButtonColor = false
+    b.LayoutOrder = ord
+    b.ZIndex = 103
+    b.Parent = page
+    MakeCorner(b, 5)
+
+    b.MouseButton1Click:Connect(function() if cb then cb() end end)
+    b.TouchTap:Connect(function() if cb then cb() end end)
+    return b
+end
+
+local function AddInputBox(page, text, default, ord, cb)
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1, 0, 0, 30)
+    f.BackgroundColor3 = C.BG3
+    f.BorderSizePixel = 0
+    f.LayoutOrder = ord
+    f.ZIndex = 102
+    f.Parent = page
+    MakeCorner(f, 5)
+
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(0.6, 0, 1, 0)
+    l.Position = UDim2.new(0, 8, 0, 0)
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.TextColor3 = C.TxtW
+    l.TextSize = 10
+    l.Font = Enum.Font.Gotham
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.ZIndex = 103
+    l.Parent = f
+
+    local tb = Instance.new("TextBox")
+    tb.Size = UDim2.new(0, 80, 0, 22)
+    tb.Position = UDim2.new(1, -88, 0.5, -11)
+    tb.BackgroundColor3 = C.BG1
+    tb.Text = tostring(default)
+    tb.TextColor3 = C.Red4
+    tb.PlaceholderText = "..."
+    tb.PlaceholderColor3 = C.TxtM
+    tb.TextSize = 11
+    tb.Font = Enum.Font.GothamBold
+    tb.ClearTextOnFocus = false
+    tb.BorderSizePixel = 0
+    tb.ZIndex = 104
+    tb.Parent = f
+    MakeCorner(tb, 4)
+    MakeStroke(tb, C.RedDark, 1)
+
+    tb.FocusLost:Connect(function()
+        if cb then cb(tb.Text) end
+    end)
+
+    return {Get = function() return tb.Text end, Set = function(v) tb.Text = tostring(v) end}
+end
+
+-- ============================================================
+-- SEKME: ЭСП (ESP)
+-- ============================================================
+local espPage = AddTab("ЭСП", 1)
+
+AddHeader(espPage, "Основные", 1)
+
+AddToggle(espPage, "Включить ЭСП", CFG.ESP_On, 2, function(v)
+    CFG.ESP_On = v
+end)
+
+AddHeader(espPage, "Визуал", 3)
+
+AddToggle(espPage, "Скелет", CFG.ESP_Skeleton, 4, function(v)
+    CFG.ESP_Skeleton = v
+end)
+
+AddToggle(espPage, "Имя игрока", CFG.ESP_Name, 5, function(v)
+    CFG.ESP_Name = v
+end)
+
+AddToggle(espPage, "Дистанция", CFG.ESP_Distance, 6, function(v)
+    CFG.ESP_Distance = v
+end)
+
+AddToggle(espPage, "Полоска здоровья", CFG.ESP_HealthBar, 7, function(v)
+    CFG.ESP_HealthBar = v
+end)
+
+AddToggle(espPage, "Рамка (Box)", CFG.ESP_Box, 8, function(v)
+    CFG.ESP_Box = v
+end)
+
+AddToggle(espPage, "Точка на голове", CFG.ESP_HeadDot, 9, function(v)
+    CFG.ESP_HeadDot = v
+end)
+
+AddToggle(espPage, "Трассер", CFG.ESP_Tracer, 10, function(v)
+    CFG.ESP_Tracer = v
+end)
+
+AddHeader(espPage, "Параметры", 11)
+
+AddSlider(espPage, "Макс. дистанция", 50, 2000, CFG.ESP_MaxDist, 12, function(v)
+    CFG.ESP_MaxDist = v
+end)
+
+AddToggle(espPage, "Проверка команды", CFG.ESP_TeamCheck, 13, function(v)
+    CFG.ESP_TeamCheck = v
+end)
+
+AddHeader(espPage, "Чамы (Chams)", 14)
+
+AddToggle(espPage, "Включить Чамы", CFG.ESP_Chams, 15, function(v)
+    CFG.ESP_Chams = v
+end)
+
+local chamsNames = {}
+for _, cc in ipairs(ChamsColors) do table.insert(chamsNames, cc.n) end
+
+AddSelector(espPage, "Цвет", chamsNames, CFG.ESP_ChamsColorIdx, 16, function(i)
+    CFG.ESP_ChamsColorIdx = i
+end)
+
+-- ============================================================
+-- SEKME: Аимбот
+-- ============================================================
+local aimPage = AddTab("Аимбот", 2)
+
+AddHeader(aimPage, "Основные", 1)
+
+AddToggle(aimPage, "Включить Аимбот", CFG.AIM_On, 2, function(v)
+    CFG.AIM_On = v
+end)
+
+AddHeader(aimPage, "Круг FOV", 3)
+
+AddToggle(aimPage, "Показать FOV", CFG.AIM_FOVShow, 4, function(v)
+    CFG.AIM_FOVShow = v
+end)
+
+local fovSlider = AddSlider(aimPage, "Размер FOV", 10, 500, CFG.AIM_FOVSize, 5, function(v)
+    CFG.AIM_FOVSize = v
+end)
+
+AddHeader(aimPage, "Цель", 6)
+
+AddSelector(aimPage, "Цель", TargetNames, CFG.AIM_TargetIdx, 7, function(i)
+    CFG.AIM_TargetIdx = i
+end)
+
+AddHeader(aimPage, "Поведение", 8)
+
+AddSlider(aimPage, "Плавность (1=мгновенно)", 1, 50, CFG.AIM_Smooth, 9, function(v)
+    CFG.AIM_Smooth = v
+end)
+
+AddToggle(aimPage, "Тихий аим (Silent)", CFG.AIM_Silent, 10, function(v)
+    CFG.AIM_Silent = v
+end)
+
+-- ============================================================
+-- SEKME: Прицел (Crosshair)
+-- ============================================================
+local crossPage = AddTab("Прицел", 3)
+
+AddHeader(crossPage, "Прицел-сердце ♥", 1)
+
+AddToggle(crossPage, "Включить прицел", CFG.CROSS_On, 2, function(v)
+    CFG.CROSS_On = v
+end)
+
+AddHeader(crossPage, "Вращение", 3)
+
+AddToggle(crossPage, "Вращение прицела", CFG.CROSS_Rotate, 4, function(v)
+    CFG.CROSS_Rotate = v
+end)
+
+AddSlider(crossPage, "Скорость вращения", 1, 20, CFG.CROSS_RotSpd, 5, function(v)
+    CFG.CROSS_RotSpd = v
+end)
+
+AddHeader(crossPage, "Внешний вид", 6)
+
+AddSlider(crossPage, "Толщина", 1, 6, CFG.CROSS_Thick, 7, function(v)
+    CFG.CROSS_Thick = v
+end)
+
+AddSlider(crossPage, "Плотность пикселей", 1, 15, CFG.CROSS_Density, 8, function(v)
+    CFG.CROSS_Density = v
+end)
+
+AddSlider(crossPage, "Размер прицела", 3, 40, CFG.CROSS_Size, 9, function(v)
+    CFG.CROSS_Size = v
+end)
+
+-- ============================================================
+-- SEKME: Настройки
+-- ============================================================
+local setPage = AddTab("Настройки", 4)
+
+AddHeader(setPage, "Обход лимита", 1)
+
+AddInputBox(setPage, "Макс. FOV (обход)", CFG.BypassLimit, 2, function(txt)
+    local n = tonumber(txt)
+    if n and n > 10 then
+        CFG.BypassLimit = n
+        fovSlider.SetMax(n)
+    end
+end)
+
+AddHeader(setPage, "Информация", 3)
+
+do
+    local inf = Instance.new("Frame")
+    inf.Size = UDim2.new(1, 0, 0, 55)
+    inf.BackgroundColor3 = C.BG3
+    inf.BorderSizePixel = 0
+    inf.LayoutOrder = 4
+    inf.ZIndex = 102
+    inf.Parent = setPage
+    MakeCorner(inf, 5)
+
+    local it = Instance.new("TextLabel")
+    it.Size = UDim2.new(1, -10, 1, -6)
+    it.Position = UDim2.new(0, 5, 0, 3)
+    it.BackgroundTransparency = 1
+    it.Text = "🎖 Fleexi Free V1 — Мобильная версия\nDelta / Codex совместимость\nВсе функции работают"
+    it.TextColor3 = C.TxtM
+    it.TextSize = 10
+    it.Font = Enum.Font.Gotham
+    it.TextWrapped = true
+    it.TextYAlignment = Enum.TextYAlignment.Top
+    it.ZIndex = 103
+    it.Parent = inf
+end
+
+AddButton(setPage, "🗑 Уничтожить скрипт", 5, function()
+    if getgenv().FleexiCleanup then
+        getgenv().FleexiCleanup()
+    end
+end)
+
+-- İlk sekmeyi aktif et
+SwitchTo("ЭСП")
+
+-- ============================================================
+-- GUI AÇ/KAPA
+-- ============================================================
+local function ToggleMain()
+    CFG.GUIOpen = not CFG.GUIOpen
+    Main.Visible = CFG.GUIOpen
+end
+
+Medal.MouseButton1Click:Connect(ToggleMain)
+Medal.TouchTap:Connect(ToggleMain)
+CloseBtn.MouseButton1Click:Connect(ToggleMain)
+CloseBtn.TouchTap:Connect(ToggleMain)
+
+-- ============================================================
+-- ESP SİSTEMİ (Drawing)
+-- ============================================================
+
+local SkeletonBonesR15 = {
+    {"Head", "UpperTorso"},
+    {"UpperTorso", "LowerTorso"},
+    {"UpperTorso", "LeftUpperArm"},
+    {"LeftUpperArm", "LeftLowerArm"},
+    {"LeftLowerArm", "LeftHand"},
+    {"UpperTorso", "RightUpperArm"},
+    {"RightUpperArm", "RightLowerArm"},
+    {"RightLowerArm", "RightHand"},
+    {"LowerTorso", "LeftUpperLeg"},
+    {"LeftUpperLeg", "LeftLowerLeg"},
+    {"LeftLowerLeg", "LeftFoot"},
+    {"LowerTorso", "RightUpperLeg"},
+    {"RightUpperLeg", "RightLowerLeg"},
+    {"RightLowerLeg", "RightFoot"},
+}
+
+local SkeletonBonesR6 = {
+    {"Head", "Torso"},
+    {"Torso", "Left Arm"},
+    {"Torso", "Right Arm"},
+    {"Torso", "Left Leg"},
+    {"Torso", "Right Leg"},
+}
+
+local function MakeESP(player)
+    if ESPCache[player] then return end
+
+    local d = {}
+
+    -- Box
+    d.box = Drawing.new("Square")
+    d.box.Thickness = 1
+    d.box.Filled = false
+    d.box.Visible = false
+    d.box.ZIndex = 3
+
+    d.boxOut = Drawing.new("Square")
+    d.boxOut.Thickness = 3
+    d.boxOut.Filled = false
+    d.boxOut.Color = Color3.new(0, 0, 0)
+    d.boxOut.Visible = false
+    d.boxOut.ZIndex = 2
+
+    -- Name
+    d.name = Drawing.new("Text")
+    d.name.Size = 13
+    d.name.Center = true
+    d.name.Outline = true
+    d.name.OutlineColor = Color3.new(0, 0, 0)
+    d.name.Font = 2
+    d.name.Visible = false
+    d.name.ZIndex = 5
+
+    -- Distance
+    d.dist = Drawing.new("Text")
+    d.dist.Size = 12
+    d.dist.Center = true
+    d.dist.Outline = true
+    d.dist.OutlineColor = Color3.new(0, 0, 0)
+    d.dist.Font = 2
+    d.dist.Visible = false
+    d.dist.ZIndex = 5
+
+    -- HeadDot
+    d.head = Drawing.new("Circle")
+    d.head.Filled = true
+    d.head.Visible = false
+    d.head.ZIndex = 4
+
+    -- Tracer
+    d.tracer = Drawing.new("Line")
+    d.tracer.Thickness = 1
+    d.tracer.Visible = false
+    d.tracer.ZIndex = 2
+
+    -- Health Bar
+    d.hpBG = Drawing.new("Square")
+    d.hpBG.Filled = true
+    d.hpBG.Color = Color3.new(0, 0, 0)
+    d.hpBG.Transparency = 0.5
+    d.hpBG.Visible = false
+    d.hpBG.ZIndex = 3
+
+    d.hpFill = Drawing.new("Square")
+    d.hpFill.Filled = true
+    d.hpFill.Visible = false
+    d.hpFill.ZIndex = 4
+
+    -- Skeleton
+    d.bones = {}
+    for i = 1, 14 do
+        local ln = Drawing.new("Line")
+        ln.Thickness = 1
+        ln.Color = C.Red4
+        ln.Visible = false
+        ln.ZIndex = 3
+        d.bones[i] = ln
+    end
+
+    ESPCache[player] = d
+end
+
+local function DestroyESP(player)
+    local d = ESPCache[player]
+    if not d then return end
+
+    SafeRemove(d.box)
+    SafeRemove(d.boxOut)
+    SafeRemove(d.name)
+    SafeRemove(d.dist)
+    SafeRemove(d.head)
+    SafeRemove(d.tracer)
+    SafeRemove(d.hpBG)
+    SafeRemove(d.hpFill)
+
+    if d.bones then
+        for _, ln in ipairs(d.bones) do
+            SafeRemove(ln)
+        end
+    end
+
+    ESPCache[player] = nil
+end
+
+local function HideAll(d)
+    d.box.Visible = false
+    d.boxOut.Visible = false
+    d.name.Visible = false
+    d.dist.Visible = false
+    d.head.Visible = false
+    d.tracer.Visible = false
+    d.hpBG.Visible = false
+    d.hpFill.Visible = false
+    for _, ln in ipairs(d.bones) do
+        ln.Visible = false
+    end
+end
+
+local function RunESP()
+    if not CFG.ESP_On then
+        for _, d in pairs(ESPCache) do
+            HideAll(d)
+        end
+        return
+    end
+
+    local myChar = LP.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LP then continue end
+
+        if not ESPCache[player] then
+            MakeESP(player)
+        end
+
+        local d = ESPCache[player]
+        if not d then continue end
+
+        if not Alive(player) then
+            HideAll(d)
+            continue
+        end
+
+        if CFG.ESP_TeamCheck and SameTeam(player) then
+            HideAll(d)
+            continue
+        end
+
+        local ch = player.Character
+        local root = ch:FindFirstChild("HumanoidRootPart")
+        local head2 = ch:FindFirstChild("Head")
+        local hum = ch:FindFirstChildOfClass("Humanoid")
+
+        if not (root and head2 and hum) then
+            HideAll(d)
+            continue
+        end
+
+        local dist = Dist(myRoot.Position, root.Position)
+        if dist > CFG.ESP_MaxDist then
+            HideAll(d)
+            continue
+        end
+
+        local rootScr, rootOn, rootZ = W2S(root.Position)
+        local headTop, headOn = W2S(head2.Position + Vector3.new(0, 0.6, 0))
+        local feetScr = W2S(root.Position - Vector3.new(0, 3, 0))
+
+        if not rootOn then
+            HideAll(d)
+            continue
+        end
+
+        local isFriend = SameTeam(player)
+        local col = isFriend and C.Friend or C.Enemy
+
+        local bH = math.abs(headTop.Y - feetScr.Y)
+        local bW = bH * 0.55
+        local bX = rootScr.X - bW / 2
+        local bY = headTop.Y
+
+        -- BOX
+        if CFG.ESP_Box then
+            d.boxOut.Size = Vector2.new(bW, bH)
+            d.boxOut.Position = Vector2.new(bX, bY)
+            d.boxOut.Visible = true
+
+            d.box.Size = Vector2.new(bW, bH)
+            d.box.Position = Vector2.new(bX, bY)
+            d.box.Color = col
+            d.box.Visible = true
+        else
+            d.box.Visible = false
+            d.boxOut.Visible = false
+        end
+
+        -- NAME
+        if CFG.ESP_Name then
+            d.name.Position = Vector2.new(rootScr.X, bY - 16)
+            d.name.Text = player.DisplayName
+            d.name.Color = col
+            d.name.Visible = true
+        else
+            d.name.Visible = false
+        end
+
+        -- DISTANCE
+        if CFG.ESP_Distance then
+            d.dist.Position = Vector2.new(rootScr.X, feetScr.Y + 3)
+            d.dist.Text = math.floor(dist) .. "м"
+            d.dist.Color = C.TxtG
+            d.dist.Visible = true
+        else
+            d.dist.Visible = false
+        end
+
+        -- HEALTH BAR
+        if CFG.ESP_HealthBar then
+            local hp = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
+            local hbX = bX - 5
+            local hbH = bH
+
+            d.hpBG.Position = Vector2.new(hbX - 1, bY - 1)
+            d.hpBG.Size = Vector2.new(4, hbH + 2)
+            d.hpBG.Visible = true
+
+            local fH = hbH * hp
+            d.hpFill.Position = Vector2.new(hbX, bY + (hbH - fH))
+            d.hpFill.Size = Vector2.new(2, fH)
+            d.hpFill.Color = Color3.fromRGB(255 * (1 - hp), 255 * hp, 40)
+            d.hpFill.Visible = true
+        else
+            d.hpBG.Visible = false
+            d.hpFill.Visible = false
+        end
+
+        -- HEAD DOT
+        if CFG.ESP_HeadDot then
+            local hScr = W2S(head2.Position)
+            d.head.Position = hScr
+            d.head.Radius = math.clamp(800 / rootZ, 2, 6)
+            d.head.Color = col
+            d.head.Visible = true
+        else
+            d.head.Visible = false
+        end
+
+        -- TRACER
+        if CFG.ESP_Tracer then
+            local vs = Camera.ViewportSize
+            d.tracer.From = Vector2.new(vs.X / 2, vs.Y)
+            d.tracer.To = rootScr
+            d.tracer.Color = col
+            d.tracer.Visible = true
+        else
+            d.tracer.Visible = false
+        end
+
+        -- SKELETON
+        if CFG.ESP_Skeleton then
+            local isR15 = ch:FindFirstChild("UpperTorso") ~= nil
+            local boneList = isR15 and SkeletonBonesR15 or SkeletonBonesR6
+
+            for i, bone in ipairs(boneList) do
+                local ln = d.bones[i]
+                if not ln then continue end
+
+                local p1 = ch:FindFirstChild(bone[1])
+                local p2 = ch:FindFirstChild(bone[2])
+
+                if p1 and p2 then
+                    local s1, o1 = W2S(p1.Position)
+                    local s2, o2 = W2S(p2.Position)
+
+                    if o1 and o2 then
+                        ln.From = s1
+                        ln.To = s2
+                        ln.Color = C.Red4
+                        ln.Visible = true
+                    else
+                        ln.Visible = false
+                    end
+                else
+                    ln.Visible = false
+                end
+            end
+
+            -- Kullanılmayan kemik çizgilerini gizle
+            for i = #boneList + 1, 14 do
+                if d.bones[i] then
+                    d.bones[i].Visible = false
+                end
+            end
+        else
+            for _, ln in ipairs(d.bones) do
+                ln.Visible = false
+            end
+        end
+    end
+end
+
+-- ============================================================
+-- CHAMS SİSTEMİ
+-- ============================================================
+local function ApplyChams()
+    -- Eski olanları temizle
+    for p, hl in pairs(ChamsCache) do
+        pcall(function() hl:Destroy() end)
+        ChamsCache[p] = nil
+    end
+
+    if not CFG.ESP_Chams or not CFG.ESP_On then return end
+
+    local chColor = ChamsColors[CFG.ESP_ChamsColorIdx] and ChamsColors[CFG.ESP_ChamsColorIdx].c or Color3.fromRGB(255, 40, 40)
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LP then continue end
+        if not Alive(player) then continue end
+        if CFG.ESP_TeamCheck and SameTeam(player) then continue end
+
+        local ch = player.Character
+        if not ch then continue end
+
+        -- Eski highlight'ı temizle
+        local old = ch:FindFirstChild("FleexiChams")
+        if old then old:Destroy() end
+
+        local hl = Instance.new("Highlight")
+        hl.Name = "FleexiChams"
+        hl.Adornee = ch
+        hl.FillColor = chColor
+        hl.FillTransparency = 0.35
+        hl.OutlineColor = chColor
+        hl.OutlineTransparency = 0
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = ch
+
+        ChamsCache[player] = hl
+    end
+end
+
+-- ============================================================
+-- AİMBOT SİSTEMİ
+-- ============================================================
+
+-- FOV Circle oluştur
+FOVCircle = Drawing.new("Circle")
+FOVCircle.Filled = false
+FOVCircle.Thickness = 1
+FOVCircle.Color = C.Red3
+FOVCircle.Transparency = 0.5
+FOVCircle.Radius = CFG.AIM_FOVSize
+FOVCircle.Visible = false
+FOVCircle.ZIndex = 10
+
+local AimTarget = nil
+
+local function GetClosestInFOV()
+    local best = nil
+    local bestDist = math.huge
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LP then continue end
+        if not Alive(player) then continue end
+        if CFG.ESP_TeamCheck and SameTeam(player) then continue end
+
+        local ch = player.Character
+        local partName = TargetParts[CFG.AIM_TargetIdx] or "Head"
+        local part = ch and ch:FindFirstChild(partName)
+        if not part then
+            part = ch and ch:FindFirstChild("HumanoidRootPart")
+        end
+        if not part then continue end
+
+        local scr, onScr = W2S(part.Position)
+        if not onScr then continue end
+
+        local d2 = (scr - center).Magnitude
+        if d2 <= CFG.AIM_FOVSize and d2 < bestDist then
+            bestDist = d2
+            best = player
+        end
+    end
+
+    return best
+end
+
+local function RunAimbot()
+    -- FOV Circle güncelle
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    FOVCircle.Position = center
+    FOVCircle.Radius = CFG.AIM_FOVSize
+    FOVCircle.Visible = CFG.AIM_On and CFG.AIM_FOVShow
+
+    if not CFG.AIM_On then return end
+
+    -- Mobilde dokunma kontrolü: ekranın sağ tarafına dokunma = nişan alma
+    local aiming = false
+
+    -- Mouse button (emülatör) veya dokunma
+    if UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+        aiming = true
+    end
+
+    -- Mobil: aktif dokunuşları kontrol et
+    if not aiming then
+        local touches = UIS:GetMouseLocation()
+        -- Basit yöntem: aimbot her zaman aktif hedefi bulsun (mobil mod)
+        -- Kullanıcı ateş butonuna bastığında silent aim devreye girer
+        if CFG.AIM_Silent then
+            aiming = true -- Silent aim sürekli hedef takip eder
+        end
+    end
+
+    -- Dokunmatik ekran desteği: tüm mevcut dokunuşları kontrol et
+    if not aiming then
+        local touchInputs = UIS:GetGamepadState(Enum.UserInputType.Touch)
+        -- Alternatif: basit approach - aiming butonu olmadan çalışır
+    end
+
+    local target = GetClosestInFOV()
+    if not target then return end
+
+    local ch = target.Character
+    if not ch then return end
+
+    local partName = TargetParts[CFG.AIM_TargetIdx] or "Head"
+    local part = ch:FindFirstChild(partName) or ch:FindFirstChild("HumanoidRootPart")
+    if not part then return end
+
+    if CFG.AIM_Silent then
+        -- Silent Aim: sürekli hedef kilitler ama ekran oynamaz
+        -- Raycast hook ile çalışır
+        AimTarget = part
+    end
+
+    if aiming and not CFG.AIM_Silent then
+        local targetPos = part.Position
+        if CFG.AIM_Smooth <= 1 then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPos)
+        else
+            local targetCF = CFrame.new(Camera.CFrame.Position, targetPos)
+            Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / CFG.AIM_Smooth)
+        end
+    end
+end
+
+-- Silent Aim Hook (Delta/Codex uyumlu)
+pcall(function()
+    local mt = getrawmetatable(game)
+    if not mt then return end
+
+    local oldNamecall = mt.__namecall
+    if setreadonly then setreadonly(mt, false) end
+
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+
+        if CFG.AIM_On and CFG.AIM_Silent and AimTarget then
+            if method == "FindPartOnRayWithIgnoreList" or
+               method == "FindPartOnRay" or
+               method == "Raycast" or
+               method == "FindPartOnRayWithWhitelist" then
+
+                local args = {...}
+                if typeof(args[1]) == "Ray" then
+                    local origin = args[1].Origin
+                    local dir = (AimTarget.Position - origin).Unit * 1000
+                    args[1] = Ray.new(origin, dir)
+                    return oldNamecall(self, unpack(args))
+                elseif typeof(self) == "Instance" and self:IsA("WorldRoot") and method == "Raycast" then
+                    local origin = args[1]
+                    if typeof(origin) == "Vector3" then
+                        local dir = (AimTarget.Position - origin).Unit * 1000
+                        args[2] = dir
+                        return oldNamecall(self, unpack(args))
+                    end
+                end
+            end
+        end
+
+        return oldNamecall(self, ...)
+    end)
+
+    if setreadonly then setreadonly(mt, true) end
+end)
+
+-- ============================================================
+-- MOBİL AİMBOT - DOKUNMA DESTEĞİ
+-- ============================================================
+-- Mobilde sağ dokunuş ile aimbot aktif etme
+local aimActive = false
+
+table.insert(Connections, UIS.TouchStarted:Connect(function(touch, processed)
+    if processed then return end
+    -- Ekranın sağ yarısına dokunulursa aimbot aktif
+    if touch.Position.X > Camera.ViewportSize.X * 0.5 then
+        aimActive = true
+    end
+end))
+
+table.insert(Connections, UIS.TouchEnded:Connect(function(touch)
+    if touch.Position.X > Camera.ViewportSize.X * 0.3 then
+        aimActive = false
+    end
+end))
+
+-- Aimbot'u dokunma ile de çalıştır
+local function RunAimbotMobile()
+    if not CFG.AIM_On then return end
+    if not aimActive and not CFG.AIM_Silent then return end
+
+    local target = GetClosestInFOV()
+    if not target then return end
+
+    local ch = target.Character
+    if not ch then return end
+
+    local partName = TargetParts[CFG.AIM_TargetIdx] or "Head"
+    local part = ch:FindFirstChild(partName) or ch:FindFirstChild("HumanoidRootPart")
+    if not part then return end
+
+    if CFG.AIM_Silent then
+        AimTarget = part
+        return
+    end
+
+    local targetPos = part.Position
+    if CFG.AIM_Smooth <= 1 then
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPos)
+    else
+        local targetCF = CFrame.new(Camera.CFrame.Position, targetPos)
+        Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / CFG.AIM_Smooth)
+    end
+end
+
+-- ============================================================
+-- CROSSHAIR SİSTEMİ (Pixel Kalp)
+-- ============================================================
+
+local function ClearCrosshair()
+    for _, dot in ipairs(CrosshairCache) do
+        SafeRemove(dot)
+    end
+    CrosshairCache = {}
+end
+
+local function HeartPoints(size, density, angle)
+    local pts = {}
+    local step = math.max(0.03, 0.25 / math.max(density, 1))
+
+    for t = 0, math.pi * 2, step do
+        local x = 16 * math.sin(t) * math.sin(t) * math.sin(t)
+        local y = -(13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t))
+
+        local s = size / 16
+        x = x * s
+        y = y * s
+
+        if angle ~= 0 then
+            local ca = math.cos(angle)
+            local sa = math.sin(angle)
+            local rx = x * ca - y * sa
+            local ry = x * sa + y * ca
+            x = rx
+            y = ry
+        end
+
+        table.insert(pts, Vector2.new(x, y))
+    end
+
+    return pts
+end
+
+local function RunCrosshair()
+    ClearCrosshair()
+
+    if not CFG.CROSS_On then return end
+
+    local cx = Camera.ViewportSize.X / 2
+    local cy = Camera.ViewportSize.Y / 2
+
+    if CFG.CROSS_Rotate then
+        CrosshairAngle = CrosshairAngle + math.rad(CFG.CROSS_RotSpd * 0.5)
+        if CrosshairAngle > math.pi * 2 then
+            CrosshairAngle = CrosshairAngle - math.pi * 2
+        end
+    else
+        CrosshairAngle = 0
+    end
+
+    local points = HeartPoints(CFG.CROSS_Size, CFG.CROSS_Density, CrosshairAngle)
+
+    for _, pt in ipairs(points) do
+        local dot = Drawing.new("Circle")
+        dot.Position = Vector2.new(cx + pt.X, cy + pt.Y)
+        dot.Radius = CFG.CROSS_Thick
+        dot.Filled = true
+        dot.Color = C.Red3
+        dot.Visible = true
+        dot.ZIndex = 20
+        dot.Transparency = 1
+        table.insert(CrosshairCache, dot)
+    end
+end
+
+-- ============================================================
+-- ANA GÜNCELLEME DÖNGÜSÜ
+-- ============================================================
+local frameCount = 0
+
+local MainLoop = RunService.RenderStepped:Connect(function()
+    frameCount = frameCount + 1
+
+    -- ESP her frame
+    RunESP()
+
+    -- Aimbot her frame
+    RunAimbot()
+    RunAimbotMobile()
+
+    -- Crosshair her frame
+    RunCrosshair()
+
+    -- Chams her 60 frame (~1 saniye)
+    if frameCount % 60 == 0 then
+        ApplyChams()
+    end
+end)
+
+table.insert(Connections, MainLoop)
+
+-- ============================================================
+-- OYUNCU BAĞLANTILARI
+-- ============================================================
+table.insert(Connections, Players.PlayerAdded:Connect(function(p)
+    task.wait(1)
+    MakeESP(p)
+    p.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        if CFG.ESP_Chams and CFG.ESP_On then
+            ApplyChams()
+        end
+    end)
+end))
+
+table.insert(Connections, Players.PlayerRemoving:Connect(function(p)
+    DestroyESP(p)
+    if ChamsCache[p] then
+        pcall(function() ChamsCache[p]:Destroy() end)
+        ChamsCache[p] = nil
+    end
+end))
+
+-- Mevcut oyuncular için ESP oluştur
+for _, p in ipairs(Players:GetPlayers()) do
+    if p ~= LP then
+        MakeESP(p)
+        pcall(function()
+            p.CharacterAdded:Connect(function()
+                task.wait(0.5)
+                if CFG.ESP_Chams and CFG.ESP_On then
+                    ApplyChams()
+                end
+            end)
+        end)
+    end
+end
+
+-- ============================================================
+-- TEMİZLEME FONKSİYONU
+-- ============================================================
+getgenv().FleexiCleanup = function()
+    -- Bağlantıları kes
+    for _, conn in ipairs(Connections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    Connections = {}
+
+    -- ESP temizle
+    for p, _ in pairs(ESPCache) do
+        DestroyESP(p)
+    end
+    ESPCache = {}
+
+    -- Chams temizle
+    for p, hl in pairs(ChamsCache) do
+        pcall(function() hl:Destroy() end)
+    end
+    ChamsCache = {}
+
+    -- Crosshair temizle
+    ClearCrosshair()
+
+    -- FOV Circle temizle
+    SafeRemove(FOVCircle)
+
+    -- GUI sil
+    pcall(function() Gui:Destroy() end)
+
+    getgenv().FleexiCleanup = nil
+end
+
+-- ============================================================
+-- BİLDİRİM
+-- ============================================================
+task.spawn(function()
+    local nf = Instance.new("Frame")
+    nf.Size = UDim2.new(0, 280, 0, 40)
+    nf.Position = UDim2.new(0.5, -140, 0, -50)
+    nf.BackgroundColor3 = C.BG2
+    nf.BorderSizePixel = 0
+    nf.ZIndex = 600
+    nf.Parent = Gui
+    MakeCorner(nf, 8)
+    MakeStroke(nf, C.Red1, 2)
+
+    local nl = Instance.new("TextLabel")
+    nl.Size = UDim2.new(1, -10, 1, 0)
+    nl.Position = UDim2.new(0, 5, 0, 0)
+    nl.BackgroundTransparency = 1
+    nl.Text = "🎖 Fleexi V1 загружен!"
+    nl.TextColor3 = C.Red4
+    nl.TextSize = 13
+    nl.Font = Enum.Font.GothamBold
+    nl.ZIndex = 601
+    nl.Parent = nf
+
+    -- Animasyon: aşağı kay
+    for i = 0, 15 do
+        nf.Position = UDim2.new(0.5, -140, 0, -50 + i * 5)
+        task.wait(0.015)
+    end
+
+    task.wait(2.5)
+
+    -- Animasyon: yukarı kay ve kaybol
+    for i = 0, 15 do
+        nf.Position = UDim2.new(0.5, -140, 0, 25 - i * 5)
+        pcall(function()
+            nf.BackgroundTransparency = i / 15
+            nl.TextTransparency = i / 15
+        end)
+        task.wait(0.015)
+    end
+
+    pcall(function() nf:Destroy() end)
+end)
+
+-- ============================================================
+print("══════════════════════════════════════")
+print("  🎖 Fleexi Free Script V1 — Mobile")
+print("  Delta / Codex uyumlu")
+print("  Tüm özellikler aktif")
+print("══════════════════════════════════════")
